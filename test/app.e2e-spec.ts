@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AuthDto } from 'src/auth/dto';
 import { before } from 'node:test';
+import { EditUserDto } from 'src/user/dto';
 
 describe('App (e2e)', () => {
   let app: INestApplication;
@@ -232,39 +233,88 @@ describe('App (e2e)', () => {
       email: 'Some1@email.com',
       password: '134441',
     };
+    let headers;
 
-    beforeAll(() => {
-      console.log('gets here');
+    beforeAll((done) => {
       request(app.getHttpServer())
-        .post('/auth/signin')
+        .post('/auth/signup')
         .send(dto)
         .expect('Content-Type', /json/)
         .expect(200)
-        .end(function (err, res) {
-          console.log(userAt, res.body);
+        .end(function (_, res) {
           userAt = res.body.access_token;
+          headers = {
+            Authorization: `Bearer ${userAt}`,
+          };
+          done();
         });
     });
 
     describe('Get me', () => {
-      const headers = {
-        Authorization: `Bearer ${userAt}`,
-      };
-      console.log(headers);
-      it('should get current user', (done) => {
-        request(app.getHttpServer())
+      it('should get current user', () => {
+        return request(app.getHttpServer())
           .get('/users/me')
           .set(headers)
           .expect('Content-Type', /json/)
-          .expect(201)
-          .end(function (err, res) {
-            if (err) return done(err);
-            return done();
-          });
+          .expect(200);
       });
     });
 
-    describe('Edit user', () => {});
+    describe('Edit user', () => {
+      it('should edit user', () => {
+        const dto: EditUserDto = {
+          email: 'new@email.com',
+          firstName: 'dmitri',
+        };
+
+        return request(app.getHttpServer())
+          .patch('/users')
+          .set(headers)
+          .send(dto)
+          .expect('Content-Type', /json/)
+          .expect(200)
+          .then((response) => {
+            expect(response.body.email).toEqual(dto.email);
+            expect(response.body.firstName).toEqual(dto.firstName);
+          });
+      });
+
+      const scenarios = [
+        {
+          description: 'should throw if email is invalid',
+          data: {
+            email: 'invalid-email',
+          },
+        },
+        {
+          description: 'should throw if firstName is not a string',
+          data: {
+            firstName: 323123,
+          },
+        },
+        {
+          description: 'should throw if lastName is not a string',
+          data: {
+            lastName: 323123,
+          },
+        },
+      ];
+
+      scenarios.forEach((item) => {
+        it(item.description, (done) => {
+          request(app.getHttpServer())
+            .patch('/users')
+            .set(headers)
+            .send(item.data)
+            .expect('Content-Type', /json/)
+            .expect(400)
+            .end(function (err, res) {
+              if (err) return done(err);
+              return done();
+            });
+        });
+      });
+    });
   });
 
   describe('Bookmarks', () => {
@@ -273,7 +323,9 @@ describe('App (e2e)', () => {
     describe('Get bookmarks', () => {});
 
     describe('Get bookmarks by id', () => {});
+
     describe('Edit bookmark', () => {});
+    
     describe('Delete bookmark', () => {});
   });
 });
