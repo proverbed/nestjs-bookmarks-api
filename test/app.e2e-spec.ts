@@ -4,8 +4,8 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AuthDto } from 'src/auth/dto';
-import { before } from 'node:test';
 import { EditUserDto } from 'src/user/dto';
+import { BookmarkDto, EditBookmarkDto } from 'src/bookmark/dto';
 
 describe('App (e2e)', () => {
   let app: INestApplication;
@@ -318,14 +318,154 @@ describe('App (e2e)', () => {
   });
 
   describe('Bookmarks', () => {
-    describe('Create bookmark', () => {});
+    let userAt: string;
+    const dto: AuthDto = {
+      email: 'bookmarks-user@email.com',
+      password: 'secure-password',
+    };
+    const createdBookmarkDto: BookmarkDto = {
+      title: 'Bookmark for google',
+      link: 'http://google.com',
+      description: 'A bookmark description',
+    };
 
-    describe('Get bookmarks', () => {});
+    let headers;
+    let createdBookmarkId: number;
 
-    describe('Get bookmarks by id', () => {});
+    beforeAll((done) => {
+      request(app.getHttpServer())
+        .post('/auth/signup')
+        .send(dto)
+        .expect('Content-Type', /json/)
+        .expect(200)
+        .end(function (_, res) {
+          userAt = res.body.access_token;
+          headers = {
+            Authorization: `Bearer ${userAt}`,
+          };
+          done();
+        });
+    });
 
-    describe('Edit bookmark', () => {});
-    
-    describe('Delete bookmark', () => {});
+    describe('Get bookmarks', () => {
+      it('should get all bookmarks - empty', () => {
+        return request(app.getHttpServer())
+          .get('/bookmarks')
+          .set(headers)
+          .expect('Content-Type', /json/)
+          .expect(200)
+          .then((response) => {
+            expect(response.body).toEqual([]);
+          });
+      });
+    });
+
+    describe('Create bookmark', () => {
+      it('should create a bookmark', () => {
+        return request(app.getHttpServer())
+          .post('/bookmarks')
+          .set(headers)
+          .send(createdBookmarkDto)
+          .expect('Content-Type', /json/)
+          .expect(201)
+          .then((response) => {
+            createdBookmarkId = response.body.id;
+            expect(response.body.title).toEqual(createdBookmarkDto.title);
+            expect(response.body.link).toEqual(createdBookmarkDto.link);
+            expect(response.body.description).toEqual(
+              createdBookmarkDto.description,
+            );
+            expect(response.body.id).toEqual(expect.anything());
+            expect(response.body.userId).toEqual(expect.anything());
+          });
+      });
+
+      it.todo(
+        'should test when the required fields are not provided, we throw an exception([title, link])',
+      );
+      it.todo(
+        'should test that we are able to create a bookmark by omitting the optional description',
+      );
+
+      it('should get all bookmarks - not empty', () => {
+        return request(app.getHttpServer())
+          .get('/bookmarks')
+          .set(headers)
+          .expect('Content-Type', /json/)
+          .expect(200)
+          .then((response) => {
+            expect(response.body.length).toEqual(1);
+            expect(response.body).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining(createdBookmarkDto),
+              ]),
+            );
+          });
+      });
+    });
+
+    describe('Get bookmarks by id', () => {
+      it('should get bookmark by id', () => {
+        return request(app.getHttpServer())
+          .get(`/bookmarks/${createdBookmarkId}`)
+          .set(headers)
+          .expect('Content-Type', /json/)
+          .expect(200)
+          .then((response) => {
+            expect(response.body).toEqual(
+              expect.objectContaining(createdBookmarkDto),
+            );
+          });
+      });
+    });
+
+    describe('Edit bookmark', () => {
+      it('should edit bookmark by id', () => {
+        const editBookmarkDto: EditBookmarkDto = {
+          title: 'Bookmark title changed for edit',
+          description: 'Bookmark description changed for edit',
+        };
+        return request(app.getHttpServer())
+          .patch(`/bookmarks/${createdBookmarkId}`)
+          .set(headers)
+          .send(editBookmarkDto)
+          .expect('Content-Type', /json/)
+          .expect(200)
+          .then((response) => {
+            expect(response.body).toEqual(
+              expect.objectContaining(editBookmarkDto),
+            );
+          });
+      });
+
+      it.todo(
+        'create a test for user trying to edit a bookmark it does not own',
+      );
+    });
+
+    describe('Delete bookmark', () => {
+      it('should delete a bookmark by id', () => {
+        const editBookmarkDto: EditBookmarkDto = {
+          title: 'Bookmark title changed for edit',
+          description: 'Bookmark description changed for edit',
+        };
+        return request(app.getHttpServer())
+          .delete(`/bookmarks/${createdBookmarkId}`)
+          .set(headers)
+          .expect(204);
+      });
+
+      it('should get empty bookmarks', () => {
+        return request(app.getHttpServer())
+          .get('/bookmarks')
+          .set(headers)
+          .expect('Content-Type', /json/)
+          .expect(200)
+          .then((response) => {
+            expect(response.body.length).toEqual(0);
+            expect(response.body).toEqual([]);
+          });
+      });
+    });
   });
 });
